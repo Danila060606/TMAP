@@ -1,0 +1,1902 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Электротранспорт СПб – конструктор карт</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; overflow: hidden; height: 100vh; }
+        .toolbar {
+            height: 56px; background: #fff; border-bottom: 1px solid #ccc;
+            display: flex; align-items: center; padding: 0 20px; gap: 10px;
+            flex-wrap: wrap; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 10; position: relative;
+        }
+        .toolbar button {
+            padding: 6px 14px; background: #4a90e2; color: white;
+            border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
+            transition: 0.2s; white-space: nowrap;
+        }
+        .toolbar button:hover { background: #357abd; }
+        .toolbar button.danger { background: #e74c3c; }
+        .toolbar button.danger:hover { background: #c0392b; }
+        .toolbar button.success { background: #27ae60; }
+        .toolbar button.success:hover { background: #1e8449; }
+        .toolbar button.warning { background: #f39c12; }
+        .toolbar button.warning:hover { background: #d68910; }
+        .toolbar label { font-size: 13px; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+        .toolbar input[type="file"] { display: none; }
+        #info { margin-left: auto; font-size: 13px; color: #555; }
+
+        .app-container {
+            display: flex; height: calc(100vh - 56px); width: 100%; position: relative;
+        }
+        #map { flex: 1; height: 100%; background: #e5e5e5; }
+
+        #properties-panel {
+            width: 320px; min-width: 200px; max-width: 600px;
+            background: #fff; border-left: 1px solid #ccc;
+            padding: 16px 18px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 14px;
+            position: relative; box-shadow: -2px 0 8px rgba(0,0,0,0.05);
+            transition: width 0.2s ease, min-width 0.2s ease, padding 0.2s ease;
+        }
+        #properties-panel.collapsed {
+            width: 0 !important; min-width: 0 !important; padding: 0 !important;
+            overflow: hidden; border-left: none;
+        }
+        #properties-panel .panel-header {
+            display: flex; justify-content: space-between; align-items: center;
+            font-weight: 600; font-size: 15px; border-bottom: 1px solid #eee; padding-bottom: 8px;
+        }
+        #properties-panel .panel-header .toggle-btn {
+            background: none; border: none; font-size: 18px; cursor: pointer; color: #888;
+            padding: 0 4px;
+        }
+        #properties-panel .panel-header .toggle-btn:hover { color: #333; }
+        .prop-group { display: flex; flex-direction: column; gap: 4px; }
+        .prop-group label { font-size: 13px; font-weight: 500; color: #444; }
+        .prop-group input, .prop-group select {
+            padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px;
+            font-size: 13px; height: 32px; width: 100%;
+        }
+        .prop-group input[type="color"] { height: 40px; padding: 2px; cursor: pointer; }
+        .prop-group input[type="range"] { padding: 0; height: 30px; }
+        .prop-group .range-value { font-size: 13px; color: #555; text-align: right; }
+        .prop-group.marker-only { display: none; }
+        .prop-group.geometry-only { display: none; }
+        .prop-group.logo-only { display: none; }
+        .resizer {
+            width: 6px; cursor: ew-resize; background: transparent;
+            position: absolute; left: -3px; top: 0; bottom: 0; z-index: 20;
+        }
+        .resizer:hover { background: rgba(0,0,0,0.1); }
+        .resizer.active { background: rgba(74, 144, 226, 0.3); }
+        @media (max-width: 768px) { #properties-panel { width: 260px; min-width: 150px; } }
+
+        .stops-control {
+            position: absolute;
+            left: 10px;
+            top: 80px;
+            z-index: 1000;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 12px 14px;
+            width: 260px;
+            max-height: 60vh;
+            overflow-y: auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            font-size: 13px;
+            cursor: default;
+            transition: none;
+        }
+        .stops-control h3 {
+            font-size: 14px; margin-bottom: 8px; color: #333; border-bottom: 1px solid #eee; padding-bottom: 6px; cursor: move; user-select: none;
+        }
+        .stops-control input[type="text"] { width: 100%; padding: 5px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; margin-bottom: 8px; }
+        #stopList { display: none; }
+        #stopList.visible { display: block; }
+        .stops-control .stop-item { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid #f5f5f5; cursor: pointer; }
+        .stops-control .stop-item:hover { background: #f0f7ff; }
+        .stops-control .stop-item input[type="checkbox"] { margin-right: 4px; cursor: pointer; }
+        .stops-control .stop-item .stop-type-icon { font-size: 16px; width: 24px; text-align: center; }
+        .stops-control .stop-item .stop-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stops-control .stop-item .stop-id { font-size: 10px; color: #888; }
+        .stops-control .stop-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .stops-control .stop-actions button { padding: 4px 10px; font-size: 12px; border: none; border-radius: 3px; cursor: pointer; background: #e0e7f0; }
+        .stops-control .stop-actions button:hover { background: #cdd7e5; }
+        .stops-control .stop-actions button.primary { background: #4a90e2; color: white; }
+        .stops-control .stop-actions button.primary:hover { background: #357abd; }
+        .stops-control .loading { color: #888; font-style: italic; padding: 8px 0; }
+        .stops-control .error { color: #c0392b; background: #fde8e8; padding: 6px 8px; border-radius: 4px; margin-top: 6px; }
+        .stops-control .cache-info { font-size: 11px; color: #888; margin-top: 4px; }
+
+        .icon-selector { margin-top: 6px; padding: 4px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; width: 100%; }
+
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4); z-index: 9999; justify-content: center; align-items: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: white; border-radius: 10px; padding: 20px 25px; max-width: 500px; width: 90%; max-height: 70vh;
+            overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .modal h3 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .modal .logo-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
+        .modal .logo-item:hover { background: #f0f7ff; }
+        .modal .logo-item img { width: 50px; height: 50px; object-fit: contain; }
+        .modal .logo-item .logo-name { flex: 1; font-weight: 500; }
+        .modal .close-modal { margin-top: 15px; padding: 6px 16px; background: #888; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .modal .close-modal:hover { background: #666; }
+        .modal .empty-msg { color: #888; font-style: italic; text-align: center; padding: 20px 0; }
+
+        #tokenModal .modal { max-width: 450px; }
+        #tokenModal input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin: 8px 0; }
+        #tokenModal .token-actions { display: flex; gap: 10px; margin-top: 10px; }
+        #tokenModal .token-actions button { flex: 1; padding: 6px; border: none; border-radius: 4px; cursor: pointer; }
+
+        #adminModal .modal { max-width: 750px; }
+        #adminContent table { width: 100%; border-collapse: collapse; }
+        #adminContent th, #adminContent td { border-bottom: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+        #adminContent th { background: #f5f5f5; font-weight: 600; }
+        #adminContent .editable { border: none; background: transparent; width: 100%; padding: 4px; }
+        #adminContent .editable:focus { background: #fff; border: 1px solid #4a90e2; border-radius: 3px; outline: none; }
+
+        .route-number-marker {
+            background: #e74c3c; color: white; font-weight: bold; font-size: 12px; width: 28px; height: 28px;
+            border-radius: 50%; border: 2px solid white; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3); text-align: center; line-height: 1; font-family: Arial, sans-serif;
+        }
+        .logo-marker { display: flex; align-items: center; justify-content: center; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button id="clearAll" class="danger">Очистить всё</button>
+        <button id="exportGeoJSON">Экспорт GeoJSON</button>
+        <label for="importInput">Импорт GeoJSON
+            <input type="file" id="importInput" accept=".geojson,.json">
+        </label>
+        <button id="exportPNG" class="success">Экспорт PNG</button>
+        <button id="exportPDF" class="success">Экспорт PDF</button>
+        <button id="addLogoBtn" class="primary">Добавить логотип</button>
+        <button id="exportLogosBtn" class="success">Сохранить логотипы</button>
+        <button id="importLogosBtn" class="warning">Загрузить логотипы</button>
+        <button id="logoutBtn" class="danger">Выход</button>
+        <button id="adminBtn" class="warning" style="display:none;">Администрирование</button>
+        <span id="info">Объектов: <span id="objectCount">0</span></span>
+    </div>
+
+    <div class="app-container">
+        <div id="map"></div>
+        <div class="stops-control" id="stopsControl">
+            <h3>Остановки (GTFS)</h3>
+            <input type="text" id="stopSearch" placeholder="Поиск по названию..." />
+            <div id="stopList"><div class="loading">Загрузка остановок...</div></div>
+            <div class="stop-actions">
+                <button id="drawLinesBetweenSelected">Линии</button>
+                <button id="refreshCache" class="warning">Обновить кэш</button>
+            </div>
+            <div id="stopError" class="error" style="display:none;"></div>
+            <div id="cacheInfo" class="cache-info"></div>
+        </div>
+        <div id="properties-panel">
+            <div class="resizer" id="resizer"></div>
+            <div class="panel-header">
+                <span>Свойства объекта</span>
+                <button class="toggle-btn" id="togglePanel" title="Свернуть/развернуть">◀</button>
+            </div>
+            <div class="prop-group marker-only" id="name-group">
+                <label for="objName">Название</label>
+                <input type="text" id="objName" placeholder="Введите название">
+            </div>
+            <div class="prop-group geometry-only" id="color-group">
+                <label for="objColor">Цвет</label>
+                <input type="color" id="objColor" value="#3388ff">
+            </div>
+            <div class="prop-group geometry-only" id="weight-group">
+                <label for="objWeight">Толщина</label>
+                <input type="number" id="objWeight" min="1" max="20" value="3">
+            </div>
+            <div class="prop-group geometry-only" id="opacity-group">
+                <label for="objOpacity">Прозрачность</label>
+                <input type="range" id="objOpacity" min="0" max="1" step="0.05" value="1">
+                <div class="range-value" id="opacityValue">1.00</div>
+            </div>
+            <div class="prop-group logo-only" id="logo-props-group">
+                <label for="logoWidth">Ширина логотипа</label>
+                <input type="number" id="logoWidth" value="50" min="10" max="300">
+                <label for="logoHeight">Высота логотипа</label>
+                <input type="number" id="logoHeight" value="50" min="10" max="300">
+                <label for="logoOpacity">Прозрачность логотипа</label>
+                <input type="range" id="logoOpacity" min="0" max="1" step="0.05" value="1">
+                <div class="range-value" id="logoOpacityValue">1.00</div>
+                <label for="logoBgColor">Цвет фона</label>
+                <input type="color" id="logoBgColor" value="#ffffff">
+                <label for="logoBgOpacity">Прозрачность фона</label>
+                <input type="range" id="logoBgOpacity" min="0" max="1" step="0.05" value="0">
+                <div class="range-value" id="logoBgOpacityValue">0.00</div>
+                <label for="logoBgWidth">Ширина фона</label>
+                <input type="number" id="logoBgWidth" value="60" min="10" max="400">
+                <label for="logoBgHeight">Высота фона</label>
+                <input type="number" id="logoBgHeight" value="60" min="10" max="400">
+            </div>
+            <div class="prop-group" id="route-number-group" style="display:none;">
+                <label for="routeNumber">Номер маршрута</label>
+                <input type="text" id="routeNumber" placeholder="Напр. 7">
+            </div>
+            <div class="prop-group" style="margin-top:auto; border-top:1px solid #eee; padding-top:12px; font-size:13px; color:#888;">
+                <span>Кликните по объекту для редактирования</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="logoModal">
+        <div class="modal">
+            <h3>Выберите логотип</h3>
+            <div id="logoList"><div class="loading">Загрузка логотипов...</div></div>
+            <button class="close-modal" id="closeLogoModal">Закрыть</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="tokenModal">
+        <div class="modal">
+            <h3>Введите GitHub Personal Access Token</h3>
+            <p style="font-size:13px; color:#555; margin:8px 0;">
+                Токен нужен для сохранения данных на GitHub. Получить его можно в настройках GitHub →
+                Developer settings → Personal access tokens (права <strong>repo</strong>).
+            </p>
+            <input type="text" id="githubTokenInput" placeholder="Введите токен" />
+            <div class="token-actions">
+                <button id="tokenOkBtn" class="primary" style="background:#4a90e2; color:white;">Сохранить</button>
+                <button id="tokenCancelBtn" style="background:#888; color:white;">Отмена</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="adminModal">
+        <div class="modal" style="max-width: 750px;">
+            <h3>👥 Управление пользователями</h3>
+            <div id="adminContent">
+                <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex:1; min-width:120px;">
+                        <label style="font-size:12px; display:block; color:#666;">Логин</label>
+                        <input type="text" id="newUsername" placeholder="Логин" style="width:100%; padding:5px 8px; border:1px solid #ccc; border-radius:4px;">
+                    </div>
+                    <div style="flex:1; min-width:120px;">
+                        <label style="font-size:12px; display:block; color:#666;">Пароль</label>
+                        <input type="password" id="newPassword" placeholder="Пароль" style="width:100%; padding:5px 8px; border:1px solid #ccc; border-radius:4px;">
+                    </div>
+                    <div style="flex:1; min-width:120px;">
+                        <label style="font-size:12px; display:block; color:#666;">ФИО</label>
+                        <input type="text" id="newFullName" placeholder="ФИО" style="width:100%; padding:5px 8px; border:1px solid #ccc; border-radius:4px;">
+                    </div>
+                    <div style="flex:0.5; min-width:80px;">
+                        <label style="font-size:12px; display:block; color:#666;">Роль</label>
+                        <select id="newRole" style="width:100%; padding:5px 8px; border:1px solid #ccc; border-radius:4px;">
+                            <option value="user">Пользователь</option>
+                            <option value="admin">Администратор</option>
+                        </select>
+                    </div>
+                    <div style="flex:0.3; min-width:80px;">
+                        <button id="createUserBtn" class="primary" style="padding:5px 14px; width:100%;">Добавить</button>
+                    </div>
+                </div>
+                <div id="userTable" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Логин</th>
+                                <th>ФИО</th>
+                                <th>Роль</th>
+                                <th style="text-align:center;">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUserTableBody"></tbody>
+                    </table>
+                </div>
+                <div style="margin-top:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <button id="saveUsersBtn" class="success" style="padding:5px 14px;">Сохранить на GitHub</button>
+                    <span id="adminStatus" style="font-size:13px; color:#888;"></span>
+                    <span id="adminTokenStatus" style="font-size:12px; color:#999;"></span>
+                </div>
+            </div>
+            <button class="close-modal" id="closeAdminModal">Закрыть</button>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const GITHUB_USER = 'Danila060606';
+            const GITHUB_REPO = 'TMAP';
+            const GITHUB_BRANCH = 'main';
+            const GITHUB_STOPS_URL = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/stops.txt`;
+            const GITHUB_LOGOS_PATH = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/LOGOT/`;
+            const GITHUB_API_CONTENTS = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/LOGOT`;
+
+            const map = L.map('map', { zoomControl: true }).setView([59.9343, 30.3351], 12);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; CartoDB',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+
+            const drawnItems = L.featureGroup().addTo(map);
+            const stopsLayer = L.layerGroup().addTo(map);
+            let stopsData = [];
+            let stopsMarkers = {};
+            let selectedStopIds = new Set();
+            const routeMarkers = new Map();
+
+            const CACHE_KEY_STOPS = 'stopsCache';
+            const CACHE_KEY_TIMESTAMP = 'stopsCacheTimestamp';
+            const ROUTES_STORAGE_KEY = 'savedRoutes';
+
+            // ------------------- ВСЕ ФУНКЦИИ КАРТЫ (без изменений) -------------------
+            function createIcon(letter, color, size, bgColor) {
+                size = size || 32;
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                ctx.beginPath();
+                ctx.arc(size / 2, size / 2, size / 2 - 2, 0, 2 * Math.PI);
+                ctx.fillStyle = bgColor || color;
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold ' + (size / 2) + 'px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(letter, size / 2, size / 2 + 1);
+                return canvas.toDataURL();
+            }
+            const typeColors = {
+                'bus': '#3498db', 'trolleybus': '#e67e22', 'tram': '#2ecc71', 'metro': '#e74c3c', 'train': '#9b59b6'
+            };
+            const iconCache = {};
+            for (let type in typeColors) {
+                const letter = (type === 'metro') ? 'М' : type.charAt(0).toUpperCase();
+                iconCache[type] = createIcon(letter, typeColors[type], 32);
+            }
+            iconCache['metro'] = createIcon('М', '#e74c3c', 32, '#e74c3c');
+            const colorMarkers = {
+                'red': createIcon('R', '#e74c3c', 25),
+                'green': createIcon('G', '#2ecc71', 25),
+                'blue': createIcon('B', '#3498db', 25)
+            };
+            const defaultIconUrl = createIcon('P', '#95a5a6', 25);
+
+            function getIconForType(type) {
+                let iconUrl = defaultIconUrl;
+                let iconSize = [25, 41];
+                let iconAnchor = [12, 41];
+                if (type && iconCache[type]) {
+                    iconUrl = iconCache[type];
+                    iconSize = [32, 32];
+                    iconAnchor = [16, 16];
+                } else if (type && colorMarkers[type]) {
+                    iconUrl = colorMarkers[type];
+                    iconSize = [25, 41];
+                    iconAnchor = [12, 41];
+                }
+                return L.icon({
+                    iconUrl: iconUrl,
+                    iconSize: iconSize,
+                    iconAnchor: iconAnchor,
+                    popupAnchor: [1, -34]
+                });
+            }
+
+            function changeStopIcon(marker, iconType) {
+                let iconUrl = defaultIconUrl;
+                let iconSize = [25, 41];
+                let iconAnchor = [12, 41];
+                if (iconType && iconCache[iconType]) {
+                    iconUrl = iconCache[iconType];
+                    iconSize = [32, 32];
+                    iconAnchor = [16, 16];
+                } else if (iconType && colorMarkers[iconType]) {
+                    iconUrl = colorMarkers[iconType];
+                    iconSize = [25, 41];
+                    iconAnchor = [12, 41];
+                }
+                const newIcon = L.icon({
+                    iconUrl: iconUrl,
+                    iconSize: iconSize,
+                    iconAnchor: iconAnchor,
+                    popupAnchor: [1, -34]
+                });
+                marker.setIcon(newIcon);
+                marker.options.iconType = iconType;
+            }
+
+            function createRouteNumberMarker(number, latlng) {
+                const divIcon = L.divIcon({
+                    className: 'route-number-marker',
+                    html: number,
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+                return L.marker(latlng, { icon: divIcon, draggable: true });
+            }
+            function updateRouteNumberMarker(layer, number) {
+                if (routeMarkers.has(layer)) {
+                    const oldMarker = routeMarkers.get(layer);
+                    if (oldMarker) drawnItems.removeLayer(oldMarker);
+                    routeMarkers.delete(layer);
+                }
+                if (number && number !== '') {
+                    const latlngs = layer.getLatLngs();
+                    if (Array.isArray(latlngs) && latlngs.length > 0) {
+                        let points = latlngs;
+                        if (Array.isArray(latlngs[0]) && !(latlngs[0] instanceof L.LatLng)) {
+                            points = latlngs[0];
+                        }
+                        if (points.length > 0) {
+                            const midIndex = Math.floor(points.length / 2);
+                            const midPoint = points[midIndex];
+                            const marker = createRouteNumberMarker(number, midPoint);
+                            marker.addTo(drawnItems);
+                            routeMarkers.set(layer, marker);
+                        }
+                    }
+                }
+            }
+            function restoreRouteMarkers() {
+                drawnItems.eachLayer(function(layer) {
+                    if (layer instanceof L.Polyline) {
+                        const props = getLayerProperties(layer);
+                        if (props.routeNumber) updateRouteNumberMarker(layer, props.routeNumber);
+                    }
+                });
+            }
+
+            function hexToRgba(hex, alpha) {
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+            }
+            function createLogoMarker(lat, lng, logoData, fileName) {
+                const defaultProps = {
+                    logoWidth: 50,
+                    logoHeight: 50,
+                    logoOpacity: 1,
+                    logoBgColor: '#ffffff',
+                    logoBgOpacity: 0,
+                    logoBgWidth: 60,
+                    logoBgHeight: 60,
+                    logoData: logoData,
+                    fileName: fileName
+                };
+                const props = { ...defaultProps };
+                const bgColor = hexToRgba(props.logoBgColor, props.logoBgOpacity);
+                const html =
+                    '<div style="position:relative;width:' + props.logoBgWidth + 'px;height:' + props.logoBgHeight + 'px;background-color:' + bgColor + ';display:flex;align-items:center;justify-content:center;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">' +
+                    '<img src="' + props.logoData + '" style="width:' + props.logoWidth + 'px;height:' + props.logoHeight + 'px;opacity:' + props.logoOpacity + ';display:block;object-fit:contain;" />' +
+                    '</div>';
+                const icon = L.divIcon({
+                    className: 'logo-marker',
+                    html: html,
+                    iconSize: [props.logoBgWidth, props.logoBgHeight],
+                    iconAnchor: [props.logoBgWidth / 2, props.logoBgHeight / 2]
+                });
+                const marker = L.marker([lat, lng], { icon: icon, draggable: true });
+                marker._logoProps = { ...props };
+                marker.updateLogo = function() {
+                    const p = this._logoProps;
+                    const bgColor = hexToRgba(p.logoBgColor, p.logoBgOpacity);
+                    const html =
+                        '<div style="position:relative;width:' + p.logoBgWidth + 'px;height:' + p.logoBgHeight + 'px;background-color:' + bgColor + ';display:flex;align-items:center;justify-content:center;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">' +
+                        '<img src="' + p.logoData + '" style="width:' + p.logoWidth + 'px;height:' + p.logoHeight + 'px;opacity:' + p.logoOpacity + ';display:block;object-fit:contain;" />' +
+                        '</div>';
+                    this.setIcon(L.divIcon({
+                        className: 'logo-marker',
+                        html: html,
+                        iconSize: [p.logoBgWidth, p.logoBgHeight],
+                        iconAnchor: [p.logoBgWidth / 2, p.logoBgHeight / 2]
+                    }));
+                };
+                marker.updateLogoProps = function(newProps) {
+                    Object.assign(this._logoProps, newProps);
+                    this.updateLogo();
+                    if (this.feature) {
+                        this.feature.properties.logoProps = { ...this._logoProps };
+                    }
+                };
+                if (!marker.feature) marker.feature = { type: 'Feature', properties: {} };
+                marker.feature.properties.logoProps = { ...props };
+                marker.on('click', function() {
+                    selectLayer(this);
+                });
+                return marker;
+            }
+
+            const panel = document.getElementById('properties-panel');
+            const resizer = document.getElementById('resizer');
+            const toggleBtn = document.getElementById('togglePanel');
+            const nameInput = document.getElementById('objName');
+            const colorInput = document.getElementById('objColor');
+            const weightInput = document.getElementById('objWeight');
+            const opacityInput = document.getElementById('objOpacity');
+            const opacitySpan = document.getElementById('opacityValue');
+            const routeNumberInput = document.getElementById('routeNumber');
+            const routeNumberGroup = document.getElementById('route-number-group');
+            const logoPropsGroup = document.getElementById('logo-props-group');
+            const logoWidthInput = document.getElementById('logoWidth');
+            const logoHeightInput = document.getElementById('logoHeight');
+            const logoOpacityInput = document.getElementById('logoOpacity');
+            const logoOpacitySpan = document.getElementById('logoOpacityValue');
+            const logoBgColorInput = document.getElementById('logoBgColor');
+            const logoBgOpacityInput = document.getElementById('logoBgOpacity');
+            const logoBgOpacitySpan = document.getElementById('logoBgOpacityValue');
+            const logoBgWidthInput = document.getElementById('logoBgWidth');
+            const logoBgHeightInput = document.getElementById('logoBgHeight');
+
+            let selectedLayer = null;
+            let updating = false;
+            let panelCollapsed = false;
+
+            function togglePanelFn(forceExpand) {
+                if (forceExpand === true) {
+                    panelCollapsed = false;
+                    panel.classList.remove('collapsed');
+                    toggleBtn.textContent = '▶';
+                    setTimeout(() => map.invalidateSize(), 100);
+                    return;
+                }
+                panelCollapsed = !panelCollapsed;
+                if (panelCollapsed) {
+                    panel.classList.add('collapsed');
+                    toggleBtn.textContent = '◀';
+                } else {
+                    panel.classList.remove('collapsed');
+                    toggleBtn.textContent = '▶';
+                }
+                setTimeout(() => map.invalidateSize(), 100);
+            }
+            if (toggleBtn) toggleBtn.addEventListener('click', function() { togglePanelFn(); });
+
+            let isResizing = false;
+            resizer.addEventListener('mousedown', function(e) {
+                isResizing = true;
+                document.body.style.cursor = 'ew-resize';
+                resizer.classList.add('active');
+                e.preventDefault();
+            });
+            document.addEventListener('mousemove', function(e) {
+                if (!isResizing) return;
+                if (panelCollapsed) return;
+                const containerRect = document.querySelector('.app-container').getBoundingClientRect();
+                let newWidth = containerRect.right - e.clientX;
+                newWidth = Math.min(600, Math.max(200, newWidth));
+                panel.style.width = newWidth + 'px';
+                map.invalidateSize();
+            });
+            document.addEventListener('mouseup', function() {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    resizer.classList.remove('active');
+                }
+            });
+
+            function getLayerProperties(layer) {
+                let props = {};
+                if (layer.feature && layer.feature.properties) {
+                    props = { ...layer.feature.properties };
+                } else {
+                    if (layer instanceof L.Marker) {
+                        if (layer._logoProps) {
+                            props = { name: 'Логотип', ...layer._logoProps };
+                        } else {
+                            props = { name: layer.options.title || '', color: '#3388ff', weight: 1, opacity: 1 };
+                        }
+                    } else if (layer instanceof L.Polyline || layer instanceof L.Polygon) {
+                        const opts = layer.options;
+                        props = { name: '', color: opts.color || '#3388ff', weight: opts.weight || 3, opacity: opts.opacity || 1 };
+                    }
+                }
+                if (!props.name) props.name = '';
+                if (!props.color) props.color = '#3388ff';
+                if (!props.weight) props.weight = (layer instanceof L.Marker) ? 1 : 3;
+                if (props.opacity === undefined) props.opacity = 1;
+                if (layer._logoProps) {
+                    props.logoProps = { ...layer._logoProps };
+                }
+                return props;
+            }
+
+            function applyPropertiesToLayer(layer, props) {
+                if (!layer) return;
+                if (!layer.feature) layer.feature = { type: 'Feature', properties: {} };
+                layer.feature.properties = { ...props };
+                if (layer instanceof L.Marker) {
+                    if (layer._logoProps) {
+                        if (props.logoProps) {
+                            layer.updateLogoProps(props.logoProps);
+                        } else if (props.logoWidth !== undefined) {
+                            const lp = {
+                                logoWidth: props.logoWidth || 50,
+                                logoHeight: props.logoHeight || 50,
+                                logoOpacity: props.logoOpacity || 1,
+                                logoBgColor: props.logoBgColor || '#ffffff',
+                                logoBgOpacity: props.logoBgOpacity || 0,
+                                logoBgWidth: props.logoBgWidth || 60,
+                                logoBgHeight: props.logoBgHeight || 60,
+                                logoData: layer._logoProps.logoData,
+                                fileName: layer._logoProps.fileName
+                            };
+                            layer.updateLogoProps(lp);
+                        }
+                    } else {
+                        if (props.name) layer.bindPopup(props.name);
+                        else layer.unbindPopup();
+                    }
+                } else if (layer instanceof L.Polyline || layer instanceof L.Polygon) {
+                    layer.setStyle({
+                        color: props.color || '#3388ff',
+                        weight: parseInt(props.weight) || 3,
+                        opacity: parseFloat(props.opacity) || 1
+                    });
+                }
+                layer.options._props = { ...props };
+            }
+
+            function updatePanel(layer) {
+                if (!layer) {
+                    const headerSpan = document.querySelector('.panel-header span');
+                    if (headerSpan) headerSpan.textContent = 'Свойства объекта';
+                    document.querySelectorAll('.prop-group').forEach(g => g.style.display = 'none');
+                    const lastGroup = document.querySelector('.prop-group:last-child');
+                    if (lastGroup) lastGroup.style.display = 'flex';
+                    if (routeNumberGroup) routeNumberGroup.style.display = 'none';
+                    if (logoPropsGroup) logoPropsGroup.style.display = 'none';
+                    return;
+                }
+                const props = getLayerProperties(layer);
+                updating = true;
+                if (nameInput) nameInput.value = props.name || '';
+                if (colorInput) colorInput.value = props.color || '#3388ff';
+                if (weightInput) weightInput.value = props.weight || 3;
+                if (opacityInput) {
+                    opacityInput.value = props.opacity || 1;
+                    opacitySpan.textContent = parseFloat(props.opacity).toFixed(2);
+                }
+                const isLogo = layer._logoProps || false;
+                if (isLogo) {
+                    const lp = layer._logoProps || {};
+                    if (logoWidthInput) logoWidthInput.value = lp.logoWidth || 50;
+                    if (logoHeightInput) logoHeightInput.value = lp.logoHeight || 50;
+                    if (logoOpacityInput) {
+                        logoOpacityInput.value = lp.logoOpacity || 1;
+                        logoOpacitySpan.textContent = parseFloat(lp.logoOpacity || 1).toFixed(2);
+                    }
+                    if (logoBgColorInput) logoBgColorInput.value = lp.logoBgColor || '#ffffff';
+                    if (logoBgOpacityInput) {
+                        logoBgOpacityInput.value = lp.logoBgOpacity || 0;
+                        logoBgOpacitySpan.textContent = parseFloat(lp.logoBgOpacity || 0).toFixed(2);
+                    }
+                    if (logoBgWidthInput) logoBgWidthInput.value = lp.logoBgWidth || 60;
+                    if (logoBgHeightInput) logoBgHeightInput.value = lp.logoBgHeight || 60;
+                }
+                updating = false;
+                const isMarker = layer instanceof L.Marker;
+                const isPolyline = layer instanceof L.Polyline || layer instanceof L.Polygon;
+                document.querySelectorAll('.prop-group').forEach(g => g.style.display = 'none');
+                const nameGroup = document.getElementById('name-group');
+                if (nameGroup) nameGroup.style.display = isMarker ? 'flex' : 'none';
+                const colorGroup = document.getElementById('color-group');
+                if (colorGroup) colorGroup.style.display = isPolyline ? 'flex' : 'none';
+                const weightGroup = document.getElementById('weight-group');
+                if (weightGroup) weightGroup.style.display = isPolyline ? 'flex' : 'none';
+                const opacityGroup = document.getElementById('opacity-group');
+                if (opacityGroup) opacityGroup.style.display = isPolyline ? 'flex' : 'none';
+                if (isPolyline) {
+                    if (routeNumberGroup) routeNumberGroup.style.display = 'flex';
+                    if (routeNumberInput) routeNumberInput.value = props.routeNumber || '';
+                } else {
+                    if (routeNumberGroup) routeNumberGroup.style.display = 'none';
+                }
+                if (isLogo) {
+                    if (logoPropsGroup) logoPropsGroup.style.display = 'flex';
+                } else {
+                    if (logoPropsGroup) logoPropsGroup.style.display = 'none';
+                }
+                const lastGroup = document.querySelector('.prop-group:last-child');
+                if (lastGroup) lastGroup.style.display = 'none';
+                const headerSpan = document.querySelector('.panel-header span');
+                if (headerSpan) {
+                    headerSpan.textContent = isLogo ? 'Свойства логотипа' : (isMarker ? 'Свойства метки' : 'Свойства фигуры');
+                }
+            }
+
+            function selectLayer(layer) {
+                if (selectedLayer === layer) return;
+                if (selectedLayer) {
+                    const oldProps = getLayerProperties(selectedLayer);
+                    applyPropertiesToLayer(selectedLayer, oldProps);
+                }
+                selectedLayer = layer;
+                if (layer) {
+                    if (layer instanceof L.Polyline || layer instanceof L.Polygon) {
+                        layer.setStyle({ color: '#ff0000', weight: (layer.options.weight || 3) + 2, opacity: 1 });
+                    }
+                    updatePanel(layer);
+                    if (panelCollapsed) togglePanelFn(true);
+                } else {
+                    updatePanel(null);
+                }
+            }
+
+            function deselectLayer() {
+                if (selectedLayer) {
+                    const props = getLayerProperties(selectedLayer);
+                    applyPropertiesToLayer(selectedLayer, props);
+                    selectedLayer = null;
+                }
+                updatePanel(null);
+            }
+
+            function updateLogoProperty(layer, prop, value) {
+                if (!layer || !layer._logoProps) return;
+                const props = getLayerProperties(layer);
+                if (!props.logoProps) props.logoProps = { ...layer._logoProps };
+                props.logoProps[prop] = value;
+                applyPropertiesToLayer(layer, props);
+                saveToLocalStorage();
+                updatePanel(layer);
+            }
+
+            if (logoWidthInput) {
+                logoWidthInput.addEventListener('input', function() {
+                    if (updating || !selectedLayer || !selectedLayer._logoProps) return;
+                    updateLogoProperty(selectedLayer, 'logoWidth', parseFloat(this.value) || 50);
+                });
+            }
+            if (logoHeightInput) {
+                logoHeightInput.addEventListener('input', function() {
+                    if (updating || !selectedLayer || !selectedLayer._logoProps) return;
+                    updateLogoProperty(selectedLayer, 'logoHeight', parseFloat(this.value) || 50);
+                });
+            }
+            if (logoOpacityInput) {
+                logoOpacityInput.addEventListener('input', function() {
+                    if (updating || !selectedLayer || !selectedLayer._logoProps) return;
+                    const val = parseFloat(this.value);
+                    logoOpacitySpan.textContent = val.toFixed(2);
+                    updateLogoProperty(selectedLayer, 'logoOpacity', val);
+                });
+            }
+            if (logoBgColorInput) {
+                logoBgColorInput.addEventListener('input', function() {
+                    if (updating || !selectedLayer || !selectedLayer._logoProps) return;
+                    updateLogoProperty(selectedLayer, 'logoBgColor', this.value);
+                });
+            }
+            if (logoBgOpacityInput) {
+                logoBgOpacityInput.addEventListener('input', function() {
+                    if (updating || !selectedLayer || !selectedLayer._logoProps) return;
+                    const val = parseFloat(this.value);
+                    logoBgOpacitySpan.textContent = val.toFixed(2);
+                    updateLogoProperty(selectedLayer, 'logoBgOpacity', val);
+                });
+            }
+            if (logoBgWidthInput) {
+                logoBgWidthInput.addEventListener('input', function() {
+                    if (updating || !selectedLayer || !selectedLayer._logoProps) return;
+                    updateLogoProperty(selectedLayer, 'logoBgWidth', parseFloat(this.value) || 60);
+                });
+            }
+            if (logoBgHeightInput) {
+                logoBgHeightInput.addEventListener('input', function() {
+                    if (updating || !selectedLayer || !selectedLayer._logoProps) return;
+                    updateLogoProperty(selectedLayer, 'logoBgHeight', parseFloat(this.value) || 60);
+                });
+            }
+
+            if (nameInput) {
+                nameInput.addEventListener('input', function() {
+                    if (updating || !selectedLayer) return;
+                    const val = this.value;
+                    const props = getLayerProperties(selectedLayer);
+                    props.name = val;
+                    applyPropertiesToLayer(selectedLayer, props);
+                    saveToLocalStorage();
+                    if (selectedLayer.getPopup()) selectedLayer.setPopupContent(val || '');
+                });
+            }
+            if (colorInput) {
+                colorInput.addEventListener('input', function() {
+                    if (updating || !selectedLayer) return;
+                    const props = getLayerProperties(selectedLayer);
+                    props.color = this.value;
+                    applyPropertiesToLayer(selectedLayer, props);
+                    saveToLocalStorage();
+                });
+            }
+            if (weightInput) {
+                weightInput.addEventListener('input', function() {
+                    if (updating || !selectedLayer) return;
+                    const props = getLayerProperties(selectedLayer);
+                    props.weight = parseInt(this.value) || 1;
+                    applyPropertiesToLayer(selectedLayer, props);
+                    saveToLocalStorage();
+                });
+            }
+            if (opacityInput) {
+                opacityInput.addEventListener('input', function() {
+                    if (updating || !selectedLayer) return;
+                    const val = parseFloat(this.value);
+                    opacitySpan.textContent = val.toFixed(2);
+                    const props = getLayerProperties(selectedLayer);
+                    props.opacity = val;
+                    applyPropertiesToLayer(selectedLayer, props);
+                    saveToLocalStorage();
+                });
+            }
+            if (routeNumberInput) {
+                routeNumberInput.addEventListener('input', function() {
+                    if (!selectedLayer || !(selectedLayer instanceof L.Polyline)) return;
+                    const number = this.value.trim();
+                    const props = getLayerProperties(selectedLayer);
+                    props.routeNumber = number;
+                    applyPropertiesToLayer(selectedLayer, props);
+                    updateRouteNumberMarker(selectedLayer, number);
+                    saveToLocalStorage();
+                });
+            }
+
+            map.on('click', function(e) {
+                const layers = drawnItems.getLayers();
+                let clicked = null;
+                for (let i = 0; i < layers.length; i++) {
+                    const layer = layers[i];
+                    if (layer instanceof L.Marker) {
+                        if (e.latlng.distanceTo(layer.getLatLng()) < 30) { clicked = layer; break; }
+                    } else if (layer instanceof L.Polyline || layer instanceof L.Polygon) {
+                        if (layer.getBounds().contains(e.latlng)) { clicked = layer; break; }
+                    }
+                }
+                if (clicked) selectLayer(clicked);
+                else deselectLayer();
+            });
+
+            const drawControl = new L.Control.Draw({
+                position: 'topleft',
+                draw: {
+                    polygon: { allowIntersection: false, showArea: true, shapeOptions: { color: '#3388ff', weight: 3, opacity: 1 } },
+                    polyline: { shapeOptions: { color: '#ff4444', weight: 3, opacity: 1 } },
+                    circle: false,
+                    rectangle: false,
+                    marker: { icon: L.icon({ iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+                            iconSize: [25, 41], iconAnchor: [12, 41] }) }
+                },
+                edit: { featureGroup: drawnItems, remove: true }
+            });
+            map.addControl(drawControl);
+
+            map.on(L.Draw.Event.CREATED, function(event) {
+                const layer = event.layer;
+                let props = {};
+                if (layer instanceof L.Marker) props = { name: '', color: '#3388ff', weight: 1, opacity: 1 };
+                else props = { name: '', color: layer.options.color || '#3388ff', weight: layer.options.weight || 3, opacity: layer.options.opacity || 1 };
+                applyPropertiesToLayer(layer, props);
+                drawnItems.addLayer(layer);
+                updateCounter();
+                saveToLocalStorage();
+                selectLayer(layer);
+                if (layer instanceof L.Marker) {
+                    layer.on('click', function() { selectLayer(this); });
+                }
+            });
+
+            map.on(L.Draw.Event.EDITED, function(event) {
+                event.layers.eachLayer(function(layer) { saveToLocalStorage(); });
+            });
+
+            map.on(L.Draw.Event.DELETED, function(event) {
+                event.layers.eachLayer(function(layer) {
+                    if (selectedLayer === layer) deselectLayer();
+                    if (routeMarkers.has(layer)) {
+                        const marker = routeMarkers.get(layer);
+                        if (marker) drawnItems.removeLayer(marker);
+                        routeMarkers.delete(layer);
+                    }
+                });
+                saveToLocalStorage();
+                updateCounter();
+            });
+
+            function updateCounter() {
+                document.getElementById('objectCount').textContent = drawnItems.getLayers().length;
+            }
+
+            function saveToLocalStorage() {
+                drawnItems.eachLayer(function(layer) {
+                    if (!layer.feature || !layer.feature.properties) {
+                        const props = getLayerProperties(layer);
+                        applyPropertiesToLayer(layer, props);
+                    }
+                });
+                const geojson = drawnItems.toGeoJSON();
+                localStorage.setItem('myMapData', JSON.stringify(geojson));
+            }
+
+            function loadFromLocalStorage() {
+                const stored = localStorage.getItem('myMapData');
+                if (!stored) return;
+                try {
+                    const geojson = JSON.parse(stored);
+                    drawnItems.clearLayers();
+                    L.geoJSON(geojson, {
+                        onEachFeature: function(feature, layer) {
+                            if (feature.properties) {
+                                applyPropertiesToLayer(layer, feature.properties);
+                            }
+                            drawnItems.addLayer(layer);
+                        }
+                    });
+                    restoreRouteMarkers();
+                    drawnItems.eachLayer(function(layer) {
+                        if (layer instanceof L.Marker && layer._logoProps) {
+                            layer.updateLogo();
+                        }
+                        if (layer instanceof L.Marker) {
+                            layer.on('click', function() { selectLayer(this); });
+                        }
+                    });
+                    map.invalidateSize();
+                    updateCounter();
+                } catch (e) { console.warn('Ошибка загрузки', e); }
+            }
+
+            document.getElementById('exportGeoJSON').addEventListener('click', function() {
+                drawnItems.eachLayer(function(layer) {
+                    if (!layer.feature || !layer.feature.properties) {
+                        const props = getLayerProperties(layer);
+                        applyPropertiesToLayer(layer, props);
+                    }
+                });
+                const geojson = drawnItems.toGeoJSON();
+                const dataStr = JSON.stringify(geojson, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'my_map.geojson';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+
+            function importGeoJSONData(geojson) {
+                drawnItems.clearLayers();
+                L.geoJSON(geojson, {
+                    onEachFeature: function(feature, layer) {
+                        if (feature.properties) {
+                            applyPropertiesToLayer(layer, feature.properties);
+                        }
+                        drawnItems.addLayer(layer);
+                    }
+                });
+                restoreRouteMarkers();
+                drawnItems.eachLayer(function(layer) {
+                    if (layer instanceof L.Marker && layer._logoProps) {
+                        layer.updateLogo();
+                    }
+                    if (layer instanceof L.Marker) {
+                        layer.on('click', function() { selectLayer(this); });
+                    }
+                });
+                map.invalidateSize();
+                updateCounter();
+                saveToLocalStorage();
+                deselectLayer();
+            }
+
+            document.getElementById('importInput').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    try {
+                        const geojson = JSON.parse(ev.target.result);
+                        importGeoJSONData(geojson);
+                        document.getElementById('importInput').value = '';
+                    } catch (err) { alert('Неверный формат GeoJSON'); }
+                };
+                reader.readAsText(file);
+            });
+
+            document.getElementById('clearAll').addEventListener('click', function() {
+                if (confirm('Удалить все объекты?')) {
+                    drawnItems.clearLayers();
+                    routeMarkers.clear();
+                    deselectLayer();
+                    updateCounter();
+                    saveToLocalStorage();
+                }
+            });
+
+            document.getElementById('exportPNG').addEventListener('click', function() {
+                const btn = this;
+                const originalText = btn.textContent;
+                btn.textContent = '⏳...';
+                btn.disabled = true;
+                const mapContainer = document.getElementById('map');
+                html2canvas(mapContainer, {
+                    useCORS: true,
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    allowTaint: false,
+                    width: mapContainer.clientWidth,
+                    height: mapContainer.clientHeight
+                }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = 'map.png';
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }).catch(err => {
+                    console.error(err);
+                    alert('Ошибка создания PNG');
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                });
+            });
+
+            document.getElementById('exportPDF').addEventListener('click', function() {
+                const btn = this;
+                const originalText = btn.textContent;
+                btn.textContent = '⏳...';
+                btn.disabled = true;
+                const mapContainer = document.getElementById('map');
+                html2canvas(mapContainer, {
+                    useCORS: true,
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    logging: false,
+                    allowTaint: false,
+                    width: mapContainer.clientWidth,
+                    height: mapContainer.clientHeight
+                }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('landscape', 'mm', 'a4');
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = pdf.internal.pageSize.getHeight();
+                    const ratio = Math.min(pdfWidth / canvas.width, pdfHeight / canvas.height);
+                    const imgX = (pdfWidth - canvas.width * ratio) / 2;
+                    const imgY = (pdfHeight - canvas.height * ratio) / 2;
+                    pdf.addImage(imgData, 'PNG', imgX, imgY, canvas.width * ratio, canvas.height * ratio);
+                    pdf.save('map.pdf');
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }).catch(err => {
+                    console.error(err);
+                    alert('Ошибка создания PDF');
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                });
+            });
+
+            const stopListDiv = document.getElementById('stopList');
+            const stopSearchInput = document.getElementById('stopSearch');
+            const stopErrorDiv = document.getElementById('stopError');
+            const cacheInfoDiv = document.getElementById('cacheInfo');
+
+            function saveStopsToCache(stops) {
+                try {
+                    localStorage.setItem(CACHE_KEY_STOPS, JSON.stringify(stops));
+                    localStorage.setItem(CACHE_KEY_TIMESTAMP, new Date().toLocaleString());
+                } catch (e) {}
+            }
+
+            function parseCSVLine(line) {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (inQuotes) {
+                        if (char === '"' && (i + 1 < line.length && line[i + 1] === '"')) {
+                            current += '"';
+                            i++;
+                        } else if (char === '"') {
+                            inQuotes = false;
+                        } else {
+                            current += char;
+                        }
+                    } else {
+                        if (char === '"') {
+                            inQuotes = true;
+                        } else if (char === ',') {
+                            result.push(current.trim());
+                            current = '';
+                        } else {
+                            current += char;
+                        }
+                    }
+                }
+                result.push(current.trim());
+                return result;
+            }
+
+            function parseStopsFromCSV(csvText) {
+                const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+                if (lines.length < 2) return [];
+                const header = parseCSVLine(lines[0]);
+                const idIdx = header.findIndex(col => col.toLowerCase() === 'stop_id');
+                const nameIdx = header.findIndex(col => col.toLowerCase() === 'stop_name');
+                const latIdx = header.findIndex(col => col.toLowerCase() === 'stop_lat');
+                const lonIdx = header.findIndex(col => col.toLowerCase() === 'stop_lon');
+                const typeIdx = header.findIndex(col => col.toLowerCase() === 'transport_type');
+                if (idIdx === -1 || nameIdx === -1 || latIdx === -1 || lonIdx === -1) {
+                    console.warn('Не найдены обязательные колонки в stops.txt');
+                    return [];
+                }
+                const stops = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const cols = parseCSVLine(lines[i]);
+                    if (cols.length <= Math.max(idIdx, nameIdx, latIdx, lonIdx, typeIdx)) continue;
+                    const id = cols[idIdx];
+                    const name = cols[nameIdx];
+                    const lat = parseFloat(cols[latIdx]);
+                    const lon = parseFloat(cols[lonIdx]);
+                    const type = (typeIdx !== -1 && cols[typeIdx]) ? cols[typeIdx] : '';
+                    if (!id || isNaN(lat) || isNaN(lon)) continue;
+                    stops.push({ id, name, lat, lon, type });
+                }
+                return stops;
+            }
+
+            async function loadStopsFromGitHub() {
+                stopListDiv.innerHTML = '<div class="loading">Загрузка остановок...</div>';
+                stopListDiv.classList.remove('visible');
+                stopErrorDiv.style.display = 'none';
+
+                const cached = localStorage.getItem(CACHE_KEY_STOPS);
+                if (cached) {
+                    try {
+                        const parsed = JSON.parse(cached);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            stopsData = parsed;
+                            renderStopList(stopsData);
+                            const ts = localStorage.getItem(CACHE_KEY_TIMESTAMP) || 'неизвестно';
+                            cacheInfoDiv.textContent = '📦 Данные из кэша (' + ts + ')';
+                            console.log('Загружено из кэша, остановок:', stopsData.length);
+                            return;
+                        }
+                    } catch (e) {}
+                }
+
+                try {
+                    const response = await fetch(GITHUB_STOPS_URL);
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    const text = await response.text();
+                    const stops = parseStopsFromCSV(text);
+                    if (!stops || stops.length === 0) throw new Error('Нет остановок');
+                    stopsData = stops;
+                    saveStopsToCache(stops);
+                    renderStopList(stops);
+                    cacheInfoDiv.textContent = '✅ Загружено с GitHub (' + stops.length + ' остановок)';
+                    console.log('Загружено с GitHub, остановок:', stops.length);
+                } catch (err) {
+                    console.error('Ошибка загрузки stops.txt с GitHub:', err);
+                    stopErrorDiv.textContent = 'Не удалось загрузить остановки с GitHub. Используем демо-данные.';
+                    stopErrorDiv.style.display = 'block';
+                    const demo = [
+                        { id: '1', name: 'Невский проспект', lat: 59.9343, lon: 30.3351, type: 'bus' },
+                        { id: '2', name: 'Садовая улица', lat: 59.9364, lon: 30.3239, type: 'tram' },
+                        { id: '3', name: 'Сенная площадь', lat: 59.9274, lon: 30.3185, type: 'metro' },
+                        { id: '4', name: 'Московский вокзал', lat: 59.9289, lon: 30.3609, type: 'train' },
+                        { id: '5', name: 'Площадь Восстания', lat: 59.9317, lon: 30.3615, type: 'bus' },
+                    ];
+                    stopsData = demo;
+                    saveStopsToCache(demo);
+                    renderStopList(demo);
+                    cacheInfoDiv.textContent = '⚠️ Демо-данные (ошибка загрузки с GitHub)';
+                }
+            }
+
+            function renderStopList(stops) {
+                const container = document.getElementById('stopList');
+                if (!stops || stops.length === 0) {
+                    container.innerHTML = '<div class="loading">Нет остановок</div>';
+                    return;
+                }
+                let html = '';
+                stops.forEach(stop => {
+                    const checked = selectedStopIds.has(stop.id) ? 'checked' : '';
+                    const typeIcon = getTypeIcon(stop.type);
+                    html += `
+                        <div class="stop-item" data-id="${stop.id}">
+                            <input type="checkbox" ${checked} data-id="${stop.id}" />
+                            <span class="stop-type-icon">${typeIcon}</span>
+                            <span class="stop-name">${stop.name}</span>
+                            <span class="stop-id">${stop.id}</span>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+                container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.addEventListener('change', function(e) {
+                        e.stopPropagation();
+                        const id = this.dataset.id;
+                        if (this.checked) {
+                            selectedStopIds.add(id);
+                            showStopOnMap(id);
+                        } else {
+                            selectedStopIds.delete(id);
+                            hideStopFromMap(id);
+                        }
+                    });
+                    cb.closest('.stop-item').addEventListener('click', function(e) {
+                        if (e.target.tagName !== 'INPUT') {
+                            const chk = this.querySelector('input[type="checkbox"]');
+                            chk.checked = !chk.checked;
+                            chk.dispatchEvent(new Event('change'));
+                        }
+                    });
+                });
+            }
+
+            function getTypeIcon(type) {
+                const map = { 'bus': '🚌', 'trolleybus': '🚎', 'tram': '🚋', 'metro': '🚇', 'train': '🚆' };
+                return map[type] || '📍';
+            }
+
+            stopSearchInput.addEventListener('input', function() {
+                const query = this.value.toLowerCase().trim();
+                const container = document.getElementById('stopList');
+                const items = container.querySelectorAll('.stop-item');
+                if (query.length > 0) {
+                    container.classList.add('visible');
+                    items.forEach(item => {
+                        const name = item.querySelector('.stop-name').textContent.toLowerCase();
+                        item.style.display = name.includes(query) ? 'flex' : 'none';
+                    });
+                } else {
+                    container.classList.remove('visible');
+                }
+            });
+
+            function showStopOnMap(id) {
+                const stop = stopsData.find(s => s.id == id);
+                if (!stop || stopsMarkers[id]) return;
+                const icon = getIconForType(stop.type);
+                const marker = L.marker([stop.lat, stop.lon], {
+                    icon: icon,
+                    title: stop.name,
+                    riseOnHover: true,
+                    stopId: stop.id
+                });
+                const popupContent = `
+                    <div style="min-width: 150px;">
+                        <b>${stop.name}</b><br>
+                        <span style="font-size: 12px; color: #666;">ID: ${stop.id}</span>
+                        ${stop.type ? `<br><span style="font-size: 12px; color: #888;">Тип: ${stop.type}</span>` : ''}
+                        <hr style="margin: 6px 0;">
+                        <label for="iconSelect_${stop.id}" style="font-size: 13px;">Иконка:</label>
+                        <select id="iconSelect_${stop.id}" class="icon-selector">
+                            <option value="default">📍 Стандартная</option>
+                            <option value="bus" ${stop.type === 'bus' ? 'selected' : ''}>🚌 Автобус</option>
+                            <option value="trolleybus" ${stop.type === 'trolleybus' ? 'selected' : ''}>🚎 Троллейбус</option>
+                            <option value="tram" ${stop.type === 'tram' ? 'selected' : ''}>🚋 Трамвай</option>
+                            <option value="metro" ${stop.type === 'metro' ? 'selected' : ''}>🚇 Метро</option>
+                            <option value="train" ${stop.type === 'train' ? 'selected' : ''}>🚆 Ж/Д</option>
+                            <option value="red">🔴 Красная</option>
+                            <option value="green">🟢 Зелёная</option>
+                            <option value="blue">🔵 Синяя</option>
+                        </select>
+                        <button id="applyIcon_${stop.id}" style="margin-top: 4px; padding: 2px 8px; font-size: 12px;">Применить</button>
+                    </div>
+                `;
+                marker.bindPopup(popupContent);
+                marker.on('popupopen', function() {
+                    const select = document.getElementById('iconSelect_' + stop.id);
+                    const applyBtn = document.getElementById('applyIcon_' + stop.id);
+                    if (applyBtn) {
+                        applyBtn.addEventListener('click', function() {
+                            const selected = select.value;
+                            changeStopIcon(marker, selected);
+                            marker.closePopup();
+                            setTimeout(() => marker.openPopup(), 100);
+                        });
+                    }
+                });
+                marker.on('click', function() {
+                    selectLayer(this);
+                });
+                marker.addTo(stopsLayer);
+                stopsMarkers[id] = marker;
+            }
+
+            function hideStopFromMap(id) {
+                if (stopsMarkers[id]) {
+                    stopsLayer.removeLayer(stopsMarkers[id]);
+                    delete stopsMarkers[id];
+                }
+            }
+
+            function drawLinesBetweenSelected() {
+                const selected = stopsData.filter(s => selectedStopIds.has(s.id));
+                if (selected.length < 2) {
+                    alert('Выберите хотя бы две остановки.');
+                    return;
+                }
+                const sorted = selected.sort((a, b) => a.id.localeCompare(b.id));
+                const latlngs = sorted.map(s => [s.lat, s.lon]);
+                const polyline = L.polyline(latlngs, {
+                    color: '#ff6600',
+                    weight: 4,
+                    opacity: 0.7,
+                    dashArray: '5, 10'
+                }).bindPopup('Маршрут между выбранными остановками');
+
+                drawnItems.addLayer(polyline);
+                const props = { name: 'Линия по остановкам', color: '#ff6600', weight: 4, opacity: 0.7 };
+                applyPropertiesToLayer(polyline, props);
+                const routeNum = prompt('Введите номер маршрута (или оставьте пустым):', '');
+                if (routeNum && routeNum.trim() !== '') {
+                    const props2 = getLayerProperties(polyline);
+                    props2.routeNumber = routeNum.trim();
+                    applyPropertiesToLayer(polyline, props2);
+                    updateRouteNumberMarker(polyline, routeNum.trim());
+                }
+                selectLayer(polyline);
+                updateCounter();
+                saveToLocalStorage();
+                map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+            }
+
+            async function getLogosFromGitHub() {
+                try {
+                    const response = await fetch(GITHUB_API_CONTENTS);
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    const files = await response.json();
+                    const imageExtensions = ['.png', '.jpg', '.jpeg', '.svg'];
+                    return files.filter(f => {
+                        const ext = f.name.substring(f.name.lastIndexOf('.')).toLowerCase();
+                        return imageExtensions.includes(ext);
+                    }).map(f => f.name);
+                } catch (err) {
+                    console.error('Ошибка получения списка логотипов с GitHub:', err);
+                    return [];
+                }
+            }
+
+            async function loadLogoFromGitHub(fileName) {
+                const url = GITHUB_LOGOS_PATH + fileName;
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) return null;
+                    const blob = await response.blob();
+                    return new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = () => resolve(null);
+                        reader.readAsDataURL(blob);
+                    });
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            const logoModal = document.getElementById('logoModal');
+            const logoListDiv = document.getElementById('logoList');
+            const closeLogoModalBtn = document.getElementById('closeLogoModal');
+
+            async function openLogoModal() {
+                logoModal.classList.add('active');
+                logoListDiv.innerHTML = '<div class="loading">Загрузка логотипов с GitHub...</div>';
+                const files = await getLogosFromGitHub();
+                if (files.length === 0) {
+                    logoListDiv.innerHTML = '<div class="empty-msg">Нет логотипов в папке LOGOT на GitHub.</div>';
+                    return;
+                }
+                let html = '';
+                for (const file of files) {
+                    const dataUrl = await loadLogoFromGitHub(file);
+                    if (dataUrl) {
+                        html += `
+                            <div class="logo-item" data-file="${file}">
+                                <img src="${dataUrl}" alt="${file}" style="width:50px;height:50px;object-fit:contain;" />
+                                <span class="logo-name">${file}</span>
+                            </div>
+                        `;
+                    }
+                }
+                logoListDiv.innerHTML = html;
+                logoListDiv.querySelectorAll('.logo-item').forEach(item => {
+                    item.addEventListener('click', async function() {
+                        const fileName = this.dataset.file;
+                        const dataUrl = await loadLogoFromGitHub(fileName);
+                        if (dataUrl) {
+                            const center = map.getCenter();
+                            const marker = createLogoMarker(center.lat, center.lng, dataUrl, fileName);
+                            marker.updateLogo();
+                            marker.addTo(drawnItems);
+                            const props = { name: fileName, logoProps: marker._logoProps };
+                            applyPropertiesToLayer(marker, props);
+                            updateCounter();
+                            saveToLocalStorage();
+                            selectLayer(marker);
+                            logoModal.classList.remove('active');
+                            console.log('Логотип добавлен:', fileName);
+                        } else {
+                            alert('Не удалось загрузить логотип.');
+                        }
+                    });
+                });
+            }
+
+            document.getElementById('addLogoBtn').addEventListener('click', openLogoModal);
+            closeLogoModalBtn.addEventListener('click', () => logoModal.classList.remove('active'));
+            logoModal.addEventListener('click', (e) => {
+                if (e.target === logoModal) logoModal.classList.remove('active');
+            });
+
+            const tokenModal = document.getElementById('tokenModal');
+            const githubTokenInput = document.getElementById('githubTokenInput');
+            const tokenOkBtn = document.getElementById('tokenOkBtn');
+            const tokenCancelBtn = document.getElementById('tokenCancelBtn');
+            let pendingSaveLogos = null;
+
+            document.getElementById('exportLogosBtn').addEventListener('click', function() {
+                const logos = [];
+                const promises = [];
+                drawnItems.eachLayer(function(layer) {
+                    if (layer instanceof L.Marker && layer._logoProps) {
+                        const latlng = layer.getLatLng();
+                        const props = layer._logoProps;
+                        const container = document.createElement('div');
+                        container.style.position = 'absolute';
+                        container.style.left = '-9999px';
+                        container.style.top = '-9999px';
+                        container.innerHTML = `
+                            <div style="position:relative;width:${props.logoBgWidth}px;height:${props.logoBgHeight}px;background-color:${props.logoBgColor};opacity:${props.logoBgOpacity};display:flex;align-items:center;justify-content:center;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,0.3);">
+                                <img src="${props.logoData}" style="width:${props.logoWidth}px;height:${props.logoHeight}px;opacity:${props.logoOpacity};display:block;object-fit:contain;" />
+                            </div>
+                        `;
+                        document.body.appendChild(container);
+                        const imgElement = container.querySelector('img');
+                        const p = new Promise((resolve) => {
+                            imgElement.onload = function() {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = props.logoBgWidth;
+                                canvas.height = props.logoBgHeight;
+                                const ctx = canvas.getContext('2d');
+                                ctx.fillStyle = props.logoBgColor;
+                                ctx.globalAlpha = props.logoBgOpacity;
+                                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                ctx.globalAlpha = 1;
+                                ctx.globalAlpha = props.logoOpacity;
+                                ctx.drawImage(imgElement, (canvas.width - props.logoWidth) / 2, (canvas.height - props.logoHeight) / 2, props.logoWidth, props.logoHeight);
+                                ctx.globalAlpha = 1;
+                                const dataUrl = canvas.toDataURL('image/png');
+                                container.remove();
+                                resolve({ dataUrl, props, latlng });
+                            };
+                            imgElement.onerror = function() {
+                                container.remove();
+                                resolve(null);
+                            };
+                            if (imgElement.complete) {
+                                imgElement.onload();
+                            }
+                        });
+                        promises.push(p);
+                    }
+                });
+                Promise.all(promises).then(results => {
+                    const validResults = results.filter(r => r !== null);
+                    if (validResults.length === 0) {
+                        alert('Не удалось сгенерировать изображения для логотипов.');
+                        return;
+                    }
+                    const logosData = validResults.map(r => ({
+                        fileName: r.props.fileName,
+                        lat: r.latlng.lat,
+                        lng: r.latlng.lng,
+                        logoWidth: r.props.logoWidth,
+                        logoHeight: r.props.logoHeight,
+                        logoOpacity: r.props.logoOpacity,
+                        logoBgColor: r.props.logoBgColor,
+                        logoBgOpacity: r.props.logoBgOpacity,
+                        logoBgWidth: r.props.logoBgWidth,
+                        logoBgHeight: r.props.logoBgHeight,
+                        base64: r.dataUrl
+                    }));
+                    if (window.electronAPI && window.electronAPI.saveLogosToGitHub) {
+                        pendingSaveLogos = logosData;
+                        githubTokenInput.value = '';
+                        tokenModal.classList.add('active');
+                    } else {
+                        const dataStr = JSON.stringify(logosData.map(({ base64, ...rest }) => rest), null, 2);
+                        const blob = new Blob([dataStr], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'logos_backup.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        alert('Сохранено локально (JSON без изображений). Для сохранения PNG нужен API.');
+                    }
+                });
+            });
+
+            tokenOkBtn.addEventListener('click', async function() {
+                const token = githubTokenInput.value.trim();
+                if (!token) {
+                    alert('Введите токен');
+                    return;
+                }
+                tokenModal.classList.remove('active');
+                try {
+                    const result = await window.electronAPI.saveLogosToGitHub(pendingSaveLogos, token);
+                    if (result.success) {
+                        alert('Логотипы сохранены на GitHub (PNG + JSON)!');
+                    } else {
+                        alert('Ошибка сохранения: ' + result.message);
+                    }
+                } catch (err) {
+                    alert('Ошибка: ' + err.message);
+                } finally {
+                    pendingSaveLogos = null;
+                }
+            });
+
+            tokenCancelBtn.addEventListener('click', function() {
+                tokenModal.classList.remove('active');
+                pendingSaveLogos = null;
+            });
+
+            tokenModal.addEventListener('click', function(e) {
+                if (e.target === tokenModal) {
+                    tokenModal.classList.remove('active');
+                    pendingSaveLogos = null;
+                }
+            });
+
+            // ---------- АДМИНИСТРИРОВАНИЕ ----------
+            const adminBtn = document.getElementById('adminBtn');
+            const adminModal = document.getElementById('adminModal');
+            const closeAdminModal = document.getElementById('closeAdminModal');
+            const adminUserTableBody = document.getElementById('adminUserTableBody');
+            const createUserBtn = document.getElementById('createUserBtn');
+            const saveUsersBtn = document.getElementById('saveUsersBtn');
+            const adminStatus = document.getElementById('adminStatus');
+            const adminTokenStatus = document.getElementById('adminTokenStatus');
+
+            let adminUsers = [];
+            let adminToken = null;
+
+            // Показываем кнопку администрирования только для админа
+            const userRole = localStorage.getItem('userRole');
+            if (userRole === 'admin') {
+                adminBtn.style.display = 'inline-block';
+            }
+
+            // Загрузка пользователей с GitHub
+            async function loadAdminUsers() {
+                adminStatus.textContent = 'Загрузка...';
+                try {
+                    if (!adminToken) {
+                        const token = await new Promise((resolve, reject) => {
+                            githubTokenInput.value = '';
+                            tokenModal.classList.add('active');
+                            tokenOkBtn.onclick = () => {
+                                const t = githubTokenInput.value.trim();
+                                if (!t) { alert('Введите токен'); return; }
+                                tokenModal.classList.remove('active');
+                                resolve(t);
+                            };
+                            tokenCancelBtn.onclick = () => {
+                                tokenModal.classList.remove('active');
+                                reject('Отмена');
+                            };
+                            tokenModal.onclick = (e) => {
+                                if (e.target === tokenModal) {
+                                    tokenModal.classList.remove('active');
+                                    reject('Отмена');
+                                }
+                            };
+                        });
+                        adminToken = token;
+                        adminTokenStatus.textContent = '✅ Токен получен';
+                    }
+                    const result = await window.electronAPI.readUsersFromGitHub(adminToken);
+                    if (result.success) {
+                        adminUsers = result.users;
+                        renderAdminUsers(adminUsers);
+                        adminStatus.textContent = '✅ Загружено (' + adminUsers.length + ' пользователей)';
+                    } else {
+                        adminStatus.textContent = '❌ ' + result.message;
+                    }
+                } catch (err) {
+                    if (err !== 'Отмена') {
+                        adminStatus.textContent = '❌ Ошибка загрузки';
+                        console.error(err);
+                    }
+                }
+            }
+
+            function renderAdminUsers(users) {
+                adminUserTableBody.innerHTML = '';
+                users.forEach((user, index) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${user.id}</td>
+                        <td><input type="text" class="admin-username" value="${user.username}" data-index="${index}" style="width:100%;border:none;background:transparent;padding:4px;"></td>
+                        <td><input type="text" class="admin-fullname" value="${user.full_name || ''}" data-index="${index}" style="width:100%;border:none;background:transparent;padding:4px;"></td>
+                        <td>
+                            <select class="admin-role" data-index="${index}" style="width:100%;padding:4px;border:none;background:transparent;">
+                                <option value="user" ${user.role === 'user' ? 'selected' : ''}>Пользователь</option>
+                                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Администратор</option>
+                            </select>
+                        </td>
+                        <td style="text-align:center; white-space:nowrap;">
+                            <button class="admin-password-btn" data-index="${index}" style="padding:2px 6px; font-size:11px; background:#f39c12; color:white; border:none; border-radius:3px; cursor:pointer;">🔑 Сменить пароль</button>
+                            <button class="admin-delete-btn" data-index="${index}" style="padding:2px 6px; font-size:11px; background:#e74c3c; color:white; border:none; border-radius:3px; cursor:pointer;">🗑</button>
+                        </td>
+                    `;
+                    adminUserTableBody.appendChild(row);
+                });
+
+                // События для кнопок
+                document.querySelectorAll('.admin-delete-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const idx = parseInt(this.dataset.index);
+                        if (confirm(`Удалить пользователя ${adminUsers[idx].username}?`)) {
+                            adminUsers.splice(idx, 1);
+                            renderAdminUsers(adminUsers);
+                        }
+                    });
+                });
+
+                document.querySelectorAll('.admin-password-btn').forEach(btn => {
+                    btn.addEventListener('click', async function() {
+                        const idx = parseInt(this.dataset.index);
+                        const user = adminUsers[idx];
+                        if (!user) return;
+                        const newPassword = prompt(`Введите новый пароль для ${user.username}:`);
+                        if (newPassword === null || newPassword.trim() === '') return;
+                        if (newPassword.length < 4) {
+                            alert('Пароль должен быть не менее 4 символов');
+                            return;
+                        }
+                        try {
+                            const hash = await window.electronAPI.hashPassword(newPassword.trim());
+                            adminUsers[idx].password_hash = hash;
+                            alert('Пароль изменён (не забудьте сохранить на GitHub)');
+                        } catch (err) {
+                            alert('Ошибка хеширования: ' + err.message);
+                        }
+                    });
+                });
+            }
+
+            // Добавление нового пользователя
+            createUserBtn.addEventListener('click', async function() {
+                const username = document.getElementById('newUsername').value.trim();
+                const password = document.getElementById('newPassword').value.trim();
+                const fullName = document.getElementById('newFullName').value.trim();
+                const role = document.getElementById('newRole').value;
+                if (!username || !password) {
+                    alert('Логин и пароль обязательны');
+                    return;
+                }
+                if (adminUsers.find(u => u.username === username)) {
+                    alert('Пользователь с таким логином уже существует');
+                    return;
+                }
+                try {
+                    const hash = await window.electronAPI.hashPassword(password);
+                    const maxId = adminUsers.reduce((max, u) => u.id > max ? u.id : max, 0);
+                    adminUsers.push({
+                        id: maxId + 1,
+                        username: username,
+                        password_hash: hash,
+                        full_name: fullName || username,
+                        role: role
+                    });
+                    renderAdminUsers(adminUsers);
+                    document.getElementById('newUsername').value = '';
+                    document.getElementById('newPassword').value = '';
+                    document.getElementById('newFullName').value = '';
+                    adminStatus.textContent = 'Пользователь добавлен (сохраните изменения)';
+                } catch (err) {
+                    alert('Ошибка хеширования пароля: ' + err.message);
+                }
+            });
+
+            // Сохранение изменений на GitHub
+            saveUsersBtn.addEventListener('click', async function() {
+                // Собираем данные из таблицы
+                const rows = adminUserTableBody.querySelectorAll('tr');
+                const updatedUsers = [];
+                rows.forEach(row => {
+                    const usernameInput = row.querySelector('.admin-username');
+                    const fullNameInput = row.querySelector('.admin-fullname');
+                    const roleSelect = row.querySelector('.admin-role');
+                    if (usernameInput && roleSelect) {
+                        const id = parseInt(row.cells[0].textContent);
+                        const username = usernameInput.value.trim();
+                        const full_name = fullNameInput ? fullNameInput.value.trim() : '';
+                        const role = roleSelect.value;
+                        const original = adminUsers.find(u => u.id === id);
+                        if (original) {
+                            updatedUsers.push({
+                                id: id,
+                                username: username,
+                                password_hash: original.password_hash, // сохраняем старый хеш
+                                full_name: full_name,
+                                role: role
+                            });
+                        }
+                    }
+                });
+                // Обновляем массив adminUsers (если были удаления, они уже учтены)
+                // adminUsers уже содержит актуальный массив после удалений и добавлений
+                // Но для верности пересоберём
+                adminUsers = updatedUsers;
+
+                adminStatus.textContent = 'Сохранение на GitHub...';
+                try {
+                    if (!adminToken) {
+                        const token = await new Promise((resolve, reject) => {
+                            githubTokenInput.value = '';
+                            tokenModal.classList.add('active');
+                            tokenOkBtn.onclick = () => {
+                                const t = githubTokenInput.value.trim();
+                                if (!t) { alert('Введите токен'); return; }
+                                tokenModal.classList.remove('active');
+                                resolve(t);
+                            };
+                            tokenCancelBtn.onclick = () => {
+                                tokenModal.classList.remove('active');
+                                reject('Отмена');
+                            };
+                            tokenModal.onclick = (e) => {
+                                if (e.target === tokenModal) {
+                                    tokenModal.classList.remove('active');
+                                    reject('Отмена');
+                                }
+                            };
+                        });
+                        adminToken = token;
+                        adminTokenStatus.textContent = '✅ Токен получен';
+                    }
+                    const result = await window.electronAPI.writeUsersToGitHub(adminUsers, adminToken);
+                    if (result.success) {
+                        adminStatus.textContent = '✅ Сохранено на GitHub!';
+                        // Обновляем локальный кэш пользователей для авторизации
+                        alert('Пользователи сохранены. Для применения изменений выйдите и войдите заново.');
+                    } else {
+                        adminStatus.textContent = '❌ ' + result.message;
+                    }
+                } catch (err) {
+                    if (err !== 'Отмена') {
+                        adminStatus.textContent = '❌ Ошибка сохранения';
+                        console.error(err);
+                    }
+                }
+            });
+
+            // Открытие/закрытие модалки админки
+            adminBtn.addEventListener('click', function() {
+                adminModal.classList.add('active');
+                loadAdminUsers();
+            });
+
+            closeAdminModal.addEventListener('click', function() {
+                adminModal.classList.remove('active');
+            });
+
+            adminModal.addEventListener('click', function(e) {
+                if (e.target === adminModal) adminModal.classList.remove('active');
+            });
+
+            document.getElementById('refreshCache').addEventListener('click', function() {
+                if (confirm('Обновить кэш остановок из GitHub?')) {
+                    localStorage.removeItem(CACHE_KEY_STOPS);
+                    localStorage.removeItem(CACHE_KEY_TIMESTAMP);
+                    loadStopsFromGitHub();
+                }
+            });
+
+            document.getElementById('drawLinesBetweenSelected').addEventListener('click', drawLinesBetweenSelected);
+
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                if (window.electronAPI && window.electronAPI.logout) {
+                    window.electronAPI.logout();
+                } else {
+                    console.warn('electronAPI.logout не доступен');
+                }
+            });
+
+            const stopsPanel = document.getElementById('stopsControl');
+            const stopsHeader = stopsPanel.querySelector('h3');
+            let isDragging = false;
+            let dragOffsetX = 0, dragOffsetY = 0;
+
+            stopsHeader.addEventListener('mousedown', function(e) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('.stop-actions')) return;
+                isDragging = true;
+                const rect = stopsPanel.getBoundingClientRect();
+                dragOffsetX = e.clientX - rect.left;
+                dragOffsetY = e.clientY - rect.top;
+                stopsPanel.style.cursor = 'grabbing';
+                e.preventDefault();
+            });
+            document.addEventListener('mousemove', function(e) {
+                if (!isDragging) return;
+                const container = document.querySelector('.app-container');
+                const containerRect = container.getBoundingClientRect();
+                const panelWidth = stopsPanel.offsetWidth;
+                const panelHeight = stopsPanel.offsetHeight;
+                let newLeft = e.clientX - containerRect.left - dragOffsetX;
+                let newTop = e.clientY - containerRect.top - dragOffsetY;
+                newLeft = Math.max(0, Math.min(newLeft, containerRect.width - panelWidth));
+                newTop = Math.max(0, Math.min(newTop, containerRect.height - panelHeight));
+                stopsPanel.style.left = newLeft + 'px';
+                stopsPanel.style.top = newTop + 'px';
+            });
+            document.addEventListener('mouseup', function() {
+                if (isDragging) {
+                    isDragging = false;
+                    stopsPanel.style.cursor = 'default';
+                }
+            });
+
+            loadFromLocalStorage();
+            updateCounter();
+            panel.classList.remove('collapsed');
+            toggleBtn.textContent = '▶';
+            updatePanel(null);
+            window.addEventListener('resize', () => map.invalidateSize());
+
+            loadStopsFromGitHub();
+            window.importGeoJSONData = importGeoJSONData;
+
+            console.log('Картограф запущен (данные с GitHub, админ-панель активна).');
+        })();
+
+        (function() {
+            if (window.electronAPI) {
+                console.log('Electron API обнаружен.');
+                window.electronAPI.onExportPNG(() => {
+                    const btn = document.getElementById('exportPNG');
+                    if (btn) btn.click();
+                });
+                window.electronAPI.onExportPDF(() => {
+                    const btn = document.getElementById('exportPDF');
+                    if (btn) btn.click();
+                });
+            } else {
+                console.warn('Electron API не найден. Приложение запущено в браузере.');
+            }
+        })();
+    </script>
+</body>
+</html>
