@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Вход</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .login-container {
+            background: white;
+            padding: 40px 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            width: 360px;
+            text-align: center;
+        }
+        .login-container h2 { margin-bottom: 20px; color: #333; }
+        .login-container label { display: block; text-align: left; font-size: 14px; font-weight: 500; margin: 10px 0 4px; color: #555; }
+        .login-container input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        .login-container button {
+            width: 100%; padding: 10px; background: #4a90e2; color: white;
+            border: none; border-radius: 4px; font-size: 16px; cursor: pointer;
+            margin-top: 16px; transition: 0.2s;
+        }
+        .login-container button:hover { background: #357abd; }
+        .login-container .error { color: #e74c3c; font-size: 14px; margin-top: 10px; display: none; }
+        .login-container .info { font-size: 13px; color: #888; margin-top: 12px; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h2>Вход</h2>
+        <form id="loginForm">
+            <label for="username">Логин</label>
+            <input type="text" id="username" placeholder="Введите логин" required />
+            <label for="password">Пароль</label>
+            <input type="password" id="password" placeholder="Введите пароль" required />
+            <button type="submit">Войти</button>
+            <div id="errorMessage" class="error"></div>
+            <div class="info">Используйте логин и пароль из users.json</div>
+        </form>
+    </div>
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.style.display = 'none';
+
+            if (!username || !password) {
+                errorDiv.textContent = 'Заполните все поля';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            try {
+                const result = await ipcRenderer.invoke('login', { username, password });
+                if (result.success) {
+                    ipcRenderer.send('login-success');
+                } else {
+                    errorDiv.textContent = result.message || 'Ошибка авторизации';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (err) {
+                errorDiv.textContent = 'Ошибка соединения с GitHub';
+                errorDiv.style.display = 'block';
+                console.error(err);
+            }
+        });
+    </script>
+</body>
+</html>
