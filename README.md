@@ -2,7 +2,7 @@
 
 [![GitHub package version](https://img.shields.io/github/package-json/v/Danila060606/TMAP)](https://github.com/Danila060606/TMAP/packages)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Автор](https://t.me/liss_of)
+[![Автор](https://img.shields.io/badge/Автор-Telegram-blue)](https://t.me/liss_of)
 
 **Картограф** – это десктопное приложение для визуализации и редактирования карт на основе OpenStreetMap. Оно позволяет создавать маршруты, добавлять остановки, настраивать логотипы и управлять данными через GitHub.
 
@@ -24,7 +24,8 @@ npm install @danila060606/tmap
 **Примечание:** Пакет содержит полный исходный код и собранные бинарные файлы (для Windows). Для Linux требуется сборка на соответствующих платформах.
 ## 🚀 Запуск из исходников
 **1.	Клонируйте репозиторий:**
-```git clone https://github.com/Danila060606/TMAP.git```cd TMAP```
+```git clone https://github.com/Danila060606/TMAP.git```
+```cd TMAP```
 
 **2.	Установите зависимости:**
 ```npm install```
@@ -157,9 +158,8 @@ GitHub → Settings → Developer settings → Personal access tokens → Tokens
 Будем рады вашему участию!
 
 ## 📬 Контакты
-•	Автор: Danila060606 [@liss_of](https://t.me/liss_of)
-
-•	Проект: https://github.com/Danila060606/TMAP
+[![Автор](https://img.shields.io/badge/Автор-Telegram-blue)](https://t.me/liss_of)
+[![Проект](https://img.shields.io/badge/Проект-github-blue)](https://github.com/Danila060606/TMAP)
 
 Сделано с ❤️ для удобного проектирования транспортных схем.
 
