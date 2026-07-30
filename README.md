@@ -75,7 +75,8 @@ GitHub → Settings → Developer settings → Personal access tokens → Tokens
     "full_name": "Иван Петров",
     "role": "user"
   }
-] ```
+]
+```
 
 
 Пароли хранятся в виде ```bcrypt-хешей```. Для генерации хеша используйте скрипт ```hash.js``` (находится в папке ```hash-gen/```).
