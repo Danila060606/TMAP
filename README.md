@@ -36,7 +36,7 @@ npm install
 bash
 npm start
 🛠️ Сборка установочного файла
-Для создания установщика (NSIS для Windows, DMG для macOS, AppImage для Linux) выполните:
+Для создания установщика (NSIS для Windows, AppImage для Linux) выполните:
 
 bash
 npm run build
@@ -46,10 +46,7 @@ Windows
 
 bash
 npm run build -- --win
-macOS
 
-bash
-npm run build -- --mac
 Linux
 
 bash
@@ -76,7 +73,7 @@ const GITHUB_BRANCH = 'main';
 Для сохранения логотипов и редактирования пользователей требуется Personal Access Token (классический) с правами repo и write:packages.
 
 Получить токен можно здесь:
-GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
+(https://t.me/liss_of)
 
 При первом сохранении логотипов или открытии админ-панели программа запросит этот токен.
 
@@ -156,7 +153,7 @@ json
 Будем рады вашему участию!
 
 📬 Контакты
-Автор: Danila060606
+Автор: Danila060606  (https://t.me/liss_of)
 
 Проект: https://github.com/Danila060606/TMAP
 
