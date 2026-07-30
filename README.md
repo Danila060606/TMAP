@@ -2,6 +2,7 @@
 
 [![GitHub package version](https://img.shields.io/github/package-json/v/Danila060606/TMAP)](https://github.com/Danila060606/TMAP/packages)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Автор](https://t.me/liss_of)
 
 **Картограф** – это десктопное приложение для визуализации и редактирования карт на основе OpenStreetMap. Оно позволяет создавать маршруты, добавлять остановки, настраивать логотипы и управлять данными через GitHub.
 
