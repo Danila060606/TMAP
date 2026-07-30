@@ -74,7 +74,8 @@ const GITHUB_BRANCH = 'main';
 Для сохранения логотипов и редактирования пользователей требуется **Personal Access Token** (классический) с правами ```repo``` и ```write:packages```.
 
 Получить токен можно здесь:
-[![Tokens](https://img.shields.io/badge/GitHub%20Token-21A038)](https://t.me/liss_of)
+
+[![Tokens](https://img.shields.io/badge/Personal%20Access%20Token-21A038)](https://t.me/liss_of)
 
 При первом сохранении логотипов или открытии админ-панели программа запросит этот токен.
 
