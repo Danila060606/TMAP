@@ -1,8 +1,11 @@
 # Картограф – десктопный конструктор карт
 
+[![Проект](https://img.shields.io/badge/github-repo-blue?logo=github)](https://github.com/Danila060606/TMAP)
 [![GitHub package version](https://img.shields.io/github/package-json/v/Danila060606/TMAP)](https://github.com/Danila060606/TMAP/packages)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Автор](https://img.shields.io/badge/Автор-github-blue?logo=github)](https://github.com/Danila060606/TMAP)
 [![Автор](https://img.shields.io/badge/Автор-Telegram-blue)](https://t.me/liss_of)
+[![поддержка](https://img.shields.io/badge/Поддержать%20через%20Сбер-21A038)](https://www.sberbank.com/sms/pbpn?requisiteNumber=79516888036)
 
 **Картограф** – это десктопное приложение для визуализации и редактирования карт на основе OpenStreetMap. Оно позволяет создавать маршруты, добавлять остановки, настраивать логотипы и управлять данными через GitHub.
 
@@ -155,11 +158,14 @@ GitHub → Settings → Developer settings → Personal access tokens → Tokens
 
 •	расширять документацию.
 
+[![поддержка](https://img.shields.io/badge/Поддержать%20через%20Сбер-21A038)](https://www.sberbank.com/sms/pbpn?requisiteNumber=79516888036)
+
 Будем рады вашему участию!
 
 ## 📬 Контакты
-[![Автор](https://img.shields.io/badge/Автор-Telegram-blue)](https://t.me/liss_of)
-[![Проект](https://img.shields.io/badge/Проект-github-blue)](https://github.com/Danila060606/TMAP)
+[![Проект](https://img.shields.io/badge/github-repo-blue?logo=github)](https://github.com/Danila060606/TMAP)
+[![Автор](https://img.shields.io/badge/Telegram-27a7e7)](https://t.me/liss_of)
+
 
 Сделано с ❤️ для удобного проектирования транспортных схем.
 
