@@ -1,6 +1,6 @@
 {
   "name": "@danila060606/tmap",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "description": "Десктопный конструктор карт",
   "main": "main.js",
   "scripts": {
